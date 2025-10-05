@@ -1,0 +1,14 @@
+medico = "jacobeco"
+tipo = '3' # Quando 1 é capsula(G, MG e MCG -> não precisa de Q.S.P e calcula automaticamente a quantidade de potes),2 é creme(G), 3 Loção(ML) e 5 Outros(quando desconhecido)
+total_medicamentos ='60'
+tipo_posologia = 'G' #tabalha apénas com ML, G, MG, MCG
+prescricao = 'Tomar 1x ao dia'
+
+
+
+cpsulas e loção seguem em quantidade o valor de volume, se 60 cps, deve colunar 60
+
+Sempre 1 pote
+Sempre a mesma quantidade deverá ser colocada em volume
+ativar o QSP somente em creme
+
