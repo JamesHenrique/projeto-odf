@@ -5,7 +5,7 @@ import os
 
 
 # sp(3)
-# screenshot = py.screenshot(r'C:\Users\Servidor\Documents\Project ODF\assets\btn_OrcamentoDisable.png',region=(234,404,250,30))#x,y,largura,altura
+# screenshot = py.screenshot(r'C:\Users\Servidor\Documents\Project ODF\assets\input_possologia.png',region=(234,404,250,30))#x,y,largura,altura
 
 
 def input_username():

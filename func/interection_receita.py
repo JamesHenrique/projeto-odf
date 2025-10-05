@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 
 from func.integrador_chatwoot_sheets import atualizar_tags_chatwoot, enviar_chatwoot_nota, obter_dados_base_receita, atualizar_status_receita
-from func.logger_config import get_logger
+from logger_config import get_logger
 
 # Configura o logger para este módulo
 logger = get_logger('interection_receita')
@@ -100,7 +100,7 @@ def gerar_orcamento():
             sp(3)
             py.press('tab', presses=3) # CAMPO MÉDICO
             print("Medico - > ",medico)
-            py.write(medico,interval=0.01)
+            py.write(medico,interval=0.05)
             py.press('tab')
             sp(3)
             alerta_encontrado = alerta_sem_cadastro()
@@ -169,10 +169,14 @@ def gerar_orcamento():
             py.write(str(tipo_formula))  # Tipo de fórmula
             py.press('tab', presses=2)
 
-            for _ in range(2):
+            sp(2)
+            if tipo != '2':
                 py.hotkey('shift', 'tab')
+            else:
+                for _ in range(2):
+                    py.hotkey('shift', 'tab')
 
-            py.write(possologia)  # prescrição
+            py.write(possologia,interval=0.05)  # prescrição
             py.press('tab')
             print("Quantidade de potes -> ",qnt_embalagem)
             print("Tipo do pote -> ",tipo_embalagem)
@@ -184,7 +188,7 @@ def gerar_orcamento():
             py.press('tab', presses=9,interval=0.5)  # Vai para o primeiro campo de insumo antes 6
             for i, medicamento in enumerate(medicamentos):
                 sp(2)
-                py.write(medicamento, interval=0.01)
+                py.write(medicamento, interval=0.05)
                 py.press("tab")
                 sp(2)
 
