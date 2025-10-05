@@ -3,6 +3,11 @@ credenciais.json
 google_cred.json
 .env
 
+# Logs
+*.log
+logs/
+*.log.*
+
 # Arquivos de ambiente Python
 __pycache__/
 *.py[cod]

@@ -5,6 +5,10 @@ import re
 from datetime import datetime
 
 from func.integrador_chatwoot_sheets import atualizar_tags_chatwoot, enviar_chatwoot_nota, obter_dados_base_receita, atualizar_status_receita
+from func.logger_config import get_logger
+
+# Configura o logger para este módulo
+logger = get_logger('interection_receita')
 
 
 
@@ -15,19 +19,17 @@ def gerar_orcamento():
         dados_receitas = obter_dados_base_receita()
         total_receitas = len(dados_receitas["data"])
 
-        print(f"Total de receitas para processar: {total_receitas}")
+        logger.info(f"Total de receitas para processar: {total_receitas}")
 
         if total_receitas == 0: 
-            print("⚠️ Nenhuma receita com status 'consultado' encontrada para processar.")
-            print("📋 Verifique se existem receitas com status 'consultado' na planilha")
-            print("❌ Receitas com status 'orçamento feito' são ignoradas automaticamente")
+            logger.warning("Nenhuma receita com status 'consultado' encontrada para processar")
+            logger.info("Verifique se existem receitas com status 'consultado' na planilha")
+            logger.info("Receitas com status 'orçamento feito' são ignoradas automaticamente")
             return 'sem receitas'
         
         # Processa cada receita individualmente
         for indice_receita, receita in enumerate(dados_receitas["data"]):
-            print(f"\n{'='*60}")
-            print(f"PROCESSANDO RECEITA {indice_receita + 1} DE {total_receitas}")
-            print(f"{'='*60}")
+            logger.info(f"PROCESSANDO RECEITA {indice_receita + 1} DE {total_receitas}")
             
             qsp = False
             id_conversa = receita["conversation_id"]
@@ -56,9 +58,9 @@ def gerar_orcamento():
                 else:
                     variacoes_dict[parte] = []
 
-            print("✅ Dicionário de medicamentos e variações:")
+            logger.debug("Dicionário de medicamentos e variações criado")
             for k, v in variacoes_dict.items():
-                print(f" - {k}: {v}")
+                logger.debug(f" - {k}: {v}")
 
             # Lista principal de medicamentos
             medicamentos = list(variacoes_dict.keys())

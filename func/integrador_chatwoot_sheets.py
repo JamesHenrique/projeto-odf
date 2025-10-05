@@ -4,6 +4,10 @@ from google.oauth2.service_account import Credentials
 import os
 import json
 from dotenv import load_dotenv
+from func.logger_config import get_logger
+
+# Configura o logger para este módulo
+logger = get_logger('integrador_chatwoot_sheets')
 
 load_dotenv()
 
@@ -49,7 +53,7 @@ def buscar_conversas_chatwoot(label):
         response = requests.post(url, headers=headers, json=payload)
         
         if response.status_code != 200:
-            print(f"ERRO Chatwoot {response.status_code}: {response.text}")
+            logger.error(f"Erro Chatwoot {response.status_code}: {response.text}")
             return []
         
         data = response.json()
@@ -58,13 +62,13 @@ def buscar_conversas_chatwoot(label):
         # Extrai apenas os IDs das conversas
         ids_conversas = [conv.get('id') for conv in conversas if conv.get('id')]
         
-        print(f"Encontradas {len(ids_conversas)} conversas no Chatwoot com a tag '{label}'")
-        print(f"IDs das conversas: {ids_conversas}")
+        logger.info(f"Encontradas {len(ids_conversas)} conversas no Chatwoot com a tag '{label}'")
+        logger.debug(f"IDs das conversas: {ids_conversas}")
         
         return ids_conversas
         
     except Exception as e:
-        print(f"ERRO ao buscar conversas no Chatwoot: {str(e)}")
+        logger.error(f"Erro ao buscar conversas no Chatwoot: {str(e)}")
         return []
 
 def conectar_google_sheets():
@@ -73,7 +77,7 @@ def conectar_google_sheets():
     """
     try:
         if not os.path.exists(SERVICE_ACCOUNT_FILE):
-            print(f"ERRO: Arquivo de credenciais nao encontrado: {SERVICE_ACCOUNT_FILE}")
+            logger.error(f"Arquivo de credenciais nao encontrado: {SERVICE_ACCOUNT_FILE}")
             return None
         
         creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -82,11 +86,11 @@ def conectar_google_sheets():
         sheet = client.open(SHEET_NAME)
         worksheet = sheet.worksheet(WORKSHEET_NAME)
         
-        print(f"Conectado ao Google Sheets - Planilha: {SHEET_NAME}, Aba: {WORKSHEET_NAME}")
+        logger.info(f"Conectado ao Google Sheets - Planilha: {SHEET_NAME}, Aba: {WORKSHEET_NAME}")
         return worksheet
         
     except Exception as e:
-        print(f"ERRO ao conectar ao Google Sheets: {str(e)}")
+        logger.error(f"Erro ao conectar ao Google Sheets: {str(e)}")
         return None
 
 def buscar_variacoes_insumos():
