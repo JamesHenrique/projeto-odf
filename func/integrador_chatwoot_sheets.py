@@ -3,6 +3,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 import json
+import traceback
+from datetime import datetime
 from dotenv import load_dotenv
 from func.logger_config import get_logger
 
@@ -25,6 +27,137 @@ SCOPES = [
 ]
 SHEET_NAME = "medicamentos-farmacia"
 WORKSHEET_NAME = "base_receita"
+LOGS_ERROS_WORKSHEET = "logs_erros"
+
+def enviar_erro_para_sheets(tipo_erro, mensagem_erro, contexto="", modulo="", linha_erro=""):
+    """
+    Envia detalhes de erro para a aba 'logs_erros' no Google Sheets.
+    
+    Args:
+        tipo_erro (str): Tipo/categoria do erro (ex: "ConnectionError", "ValueError", etc.)
+        mensagem_erro (str): Mensagem descritiva do erro
+        contexto (str): Contexto onde o erro ocorreu (função, operação, etc.)
+        modulo (str): Nome do módulo onde o erro ocorreu
+        linha_erro (str): Número da linha onde o erro ocorreu (se disponível)
+    
+    Returns:
+        bool: True se o erro foi registrado com sucesso, False caso contrário
+    """
+    try:
+        # Conecta ao Google Sheets
+        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+        client = gspread.authorize(creds)
+        
+        sheet = client.open(SHEET_NAME)
+        
+        # Tenta acessar a aba logs_erros, se não existir, cria
+        try:
+            worksheet_erros = sheet.worksheet(LOGS_ERROS_WORKSHEET)
+        except gspread.WorksheetNotFound:
+            logger.info(f"Aba '{LOGS_ERROS_WORKSHEET}' não encontrada. Criando nova aba...")
+            
+            # Cria a aba
+            worksheet_erros = sheet.add_worksheet(
+                title=LOGS_ERROS_WORKSHEET, 
+                rows="1000", 
+                cols="10"
+            )
+            
+            # Adiciona cabeçalhos
+            cabecalhos = [
+                "timestamp",
+                "data_hora", 
+                "tipo_erro",
+                "mensagem",
+                "contexto",
+                "modulo",
+                "linha",
+                "severidade",
+                "usuario_sistema",
+                "detalhes_extras"
+            ]
+            worksheet_erros.append_row(cabecalhos)
+            logger.info(f"Aba '{LOGS_ERROS_WORKSHEET}' criada com cabeçalhos")
+        
+        # Prepara os dados do erro
+        agora = datetime.now()
+        timestamp = agora.isoformat()
+        data_hora_legivel = agora.strftime("%d/%m/%Y %H:%M:%S")
+        
+        # Determina severidade baseada no tipo de erro
+        severidade = "MEDIUM"
+        if any(palavra in tipo_erro.lower() for palavra in ["critical", "fatal", "connection", "auth"]):
+            severidade = "HIGH"
+        elif any(palavra in tipo_erro.lower() for palavra in ["warning", "deprecated"]):
+            severidade = "LOW"
+        
+        # Dados a serem inseridos
+        nova_linha = [
+            timestamp,
+            data_hora_legivel,
+            tipo_erro,
+            mensagem_erro[:500],  # Limita a mensagem a 500 caracteres
+            contexto[:200],       # Limita contexto a 200 caracteres
+            modulo,
+            str(linha_erro),
+            severidade,
+            os.getenv("USERNAME", "sistema"),  # Usuário do sistema Windows
+            f"Python {os.sys.version.split()[0]}"  # Versão do Python
+        ]
+        
+        # Adiciona a linha na planilha
+        worksheet_erros.append_row(nova_linha)
+        
+        logger.info(f"Erro registrado em logs_erros: {tipo_erro} - {contexto}")
+        return True
+        
+    except Exception as e:
+        # Se falhar ao registrar o erro, apenas loga localmente para evitar loop infinito
+        logger.error(f"FALHA ao registrar erro no Google Sheets: {str(e)}")
+        logger.error(f"Erro original que tentava registrar: {tipo_erro} - {mensagem_erro}")
+        return False
+
+
+def registrar_erro_automatico(e, contexto="", modulo_origem=""):
+    """
+    Função helper que automaticamente extrai informações de uma exceção e registra no Sheets.
+    
+    Args:
+        e (Exception): A exceção capturada
+        contexto (str): Contexto adicional sobre onde o erro ocorreu
+        modulo_origem (str): Nome do módulo de origem
+    
+    Returns:
+        bool: True se registrado com sucesso
+    """
+    try:
+        # Extrai informações da exceção
+        tipo_erro = type(e).__name__
+        mensagem_erro = str(e)
+        
+        # Tenta obter informações do traceback
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb:
+            ultimo_frame = tb[-1]
+            linha_erro = str(ultimo_frame.lineno)
+            if not modulo_origem:
+                modulo_origem = ultimo_frame.filename.split(os.sep)[-1]
+        else:
+            linha_erro = ""
+        
+        # Registra o erro
+        return enviar_erro_para_sheets(
+            tipo_erro=tipo_erro,
+            mensagem_erro=mensagem_erro,
+            contexto=contexto,
+            modulo=modulo_origem,
+            linha_erro=linha_erro
+        )
+        
+    except Exception as erro_interno:
+        logger.error(f"Erro interno ao registrar exceção: {str(erro_interno)}")
+        return False
+
 
 def buscar_conversas_chatwoot(label):
     """
@@ -53,7 +186,15 @@ def buscar_conversas_chatwoot(label):
         response = requests.post(url, headers=headers, json=payload)
         
         if response.status_code != 200:
-            logger.error(f"Erro Chatwoot {response.status_code}: {response.text}")
+            erro_msg = f"Erro Chatwoot {response.status_code}: {response.text}"
+            logger.error(erro_msg)
+            # Registra erro no Sheets
+            enviar_erro_para_sheets(
+                tipo_erro="ChatwootAPIError",
+                mensagem_erro=erro_msg,
+                contexto="buscar_conversas_chatwoot",
+                modulo="integrador_chatwoot_sheets.py"
+            )
             return []
         
         data = response.json()
@@ -68,7 +209,10 @@ def buscar_conversas_chatwoot(label):
         return ids_conversas
         
     except Exception as e:
-        logger.error(f"Erro ao buscar conversas no Chatwoot: {str(e)}")
+        erro_msg = f"Erro ao buscar conversas no Chatwoot: {str(e)}"
+        logger.error(erro_msg)
+        # Registra erro no Sheets
+        registrar_erro_automatico(e, "buscar_conversas_chatwoot", "integrador_chatwoot_sheets.py")
         return []
 
 def conectar_google_sheets():
@@ -77,7 +221,15 @@ def conectar_google_sheets():
     """
     try:
         if not os.path.exists(SERVICE_ACCOUNT_FILE):
-            logger.error(f"Arquivo de credenciais nao encontrado: {SERVICE_ACCOUNT_FILE}")
+            erro_msg = f"Arquivo de credenciais nao encontrado: {SERVICE_ACCOUNT_FILE}"
+            logger.error(erro_msg)
+            # Registra erro no Sheets (se possível)
+            enviar_erro_para_sheets(
+                tipo_erro="FileNotFoundError",
+                mensagem_erro=erro_msg,
+                contexto="conectar_google_sheets",
+                modulo="integrador_chatwoot_sheets.py"
+            )
             return None
         
         creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -90,7 +242,10 @@ def conectar_google_sheets():
         return worksheet
         
     except Exception as e:
-        logger.error(f"Erro ao conectar ao Google Sheets: {str(e)}")
+        erro_msg = f"Erro ao conectar ao Google Sheets: {str(e)}"
+        logger.error(erro_msg)
+        # Registra erro no Sheets
+        registrar_erro_automatico(e, "conectar_google_sheets", "integrador_chatwoot_sheets.py")
         return None
 
 def buscar_variacoes_insumos():
@@ -482,14 +637,30 @@ def atualizar_status_receita(id_receita, novo_status="orçamento feito"):
                 return True
                 
             except ValueError:
-                print("❌ Coluna 'status' não encontrada na planilha")
+                erro_msg = "Coluna 'status' não encontrada na planilha"
+                logger.error(erro_msg)
+                enviar_erro_para_sheets(
+                    tipo_erro="DataStructureError",
+                    mensagem_erro=erro_msg,
+                    contexto="atualizar_status_receita - buscar coluna status",
+                    modulo="integrador_chatwoot_sheets.py"
+                )
                 return False
         else:
-            print(f"❌ ID da receita {id_receita} não encontrado na planilha")
+            erro_msg = f"ID da receita {id_receita} não encontrado na planilha"
+            logger.error(erro_msg)
+            enviar_erro_para_sheets(
+                tipo_erro="DataNotFoundError",
+                mensagem_erro=erro_msg,
+                contexto="atualizar_status_receita - buscar ID receita",
+                modulo="integrador_chatwoot_sheets.py"
+            )
             return False
             
     except Exception as e:
-        print(f"❌ Erro ao atualizar status no Google Sheets: {str(e)}")
+        erro_msg = f"Erro ao atualizar status no Google Sheets: {str(e)}"
+        logger.error(erro_msg)
+        registrar_erro_automatico(e, "atualizar_status_receita", "integrador_chatwoot_sheets.py")
         return False
 
 

@@ -5,7 +5,7 @@ import os
 
 
 # sp(3)
-# screenshot = py.screenshot(r'C:\Users\Servidor\Documents\Project ODF\assets\input_possologia.png',region=(234,404,250,30))#x,y,largura,altura
+# screenshot = py.screenshot(r'C:\Users\Servidor\Documents\Project ODF\assets\alerta_crm.png',region=(532,477,210,50))#x,y,largura,altura
 
 
 def input_username():
@@ -560,6 +560,23 @@ def alerta_Retirada():
             sp(3)  # Espera 1 segundo antes de tentar novamente
         return 'nao'
 
+
+def alerta_crm():
+    sp(1)
+    tentativas = 0
+    while tentativas != 3:
+        try:
+            button_location = py.locateOnScreen(r"C:\Users\Servidor\Documents\Project ODF\assets\alerta_crm.png", confidence=0.9) #alterar o confidence sempre que não achar
+            if button_location:
+                print('alerta_crm localizado')
+                sp(2)
+                return 'sim'
+        except:
+            # py.press('esc',presses=2)
+            print('tentando localizar - alerta_crm')
+            tentativas += 1
+        sp(3)  # Espera 1 segundo antes de tentar novamente
+    return 'nao'
 
 
 def aba_orcamento():

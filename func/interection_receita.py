@@ -1,11 +1,12 @@
-from func.actions_btn import alerta_Prodembalagens, alerta_Retirada, alerta_acrescimo, alerta_impressao, alerta_maisformulas, click_btn_fecharLogo, alerta_sem_cadastro, alerta_qntzerada, click_btn_okModal, click_campo_data,click_btn_ok,click_btn_sim,click_btn_nao,alerta_dadoscorretos,alerta_controlados, click_novo_orcamento
+from func.actions_btn import alerta_Prodembalagens, alerta_Retirada, alerta_acrescimo, alerta_crm, alerta_impressao, alerta_maisformulas, btn_OrcamentoDisable, click_btn_fecharLogo, alerta_sem_cadastro, alerta_qntzerada, click_btn_okModal, click_campo_data,click_btn_ok,click_btn_sim,click_btn_nao,alerta_dadoscorretos,alerta_controlados, click_novo_orcamento
 import pyautogui as py  
 from time import sleep as sp
 import re
 from datetime import datetime
 
+from func.inic_login import closed_fcerta
 from func.integrador_chatwoot_sheets import atualizar_tags_chatwoot, enviar_chatwoot_nota, obter_dados_base_receita, atualizar_status_receita
-from logger_config import get_logger
+from func.logger_config import get_logger
 
 # Configura o logger para este módulo
 logger = get_logger('interection_receita')
@@ -98,7 +99,13 @@ def gerar_orcamento():
 
             # --- CAMPO MÉDICO ---
             sp(3)
-            py.press('tab', presses=3) # CAMPO MÉDICO
+            py.press('tab', presses=3, interval=0.05) # CAMPO MÉDICO
+
+            if alerta_crm() == 'sim':
+                print("⚠️ ALERTA DE CRM")
+                py.press('enter')
+
+            sp(3)
             print("Medico - > ",medico)
             py.write(medico,interval=0.05)
             py.press('tab')
@@ -109,11 +116,14 @@ def gerar_orcamento():
                 py.press('enter')
                 py.press('esc')
                 sp(3)
-                py.write('YASNA BAEZA')  # fallback padrão
+                py.write('YASNA BAEZA', interval=0.05)  # fallback padrão
             sp(3)
             py.press('ENTER')
             sp(3)
-            click_btn_fecharLogo()
+            if click_btn_fecharLogo() == 'nao':
+                print("NÃO FECHOU O LOGO")
+                return False
+            
             print("✅ CAMPOS MÉDICO PREENCHIDOS")
 
 
@@ -325,14 +335,11 @@ def gerar_orcamento():
             else:
                 print(f"\n✅ TODAS AS {total_receitas} RECEITAS FORAM PROCESSADAS!")
                 print("Processo finalizado com sucesso!")
+                
+                btn_OrcamentoDisable()
                 sp(5)
-                py.press('f2') #gerran um novo orçamento 
-                sp(3)
-                py.press('enter')
-                sp(2)
+                py.press('esc')
                 return True
 
        
-
-
 
