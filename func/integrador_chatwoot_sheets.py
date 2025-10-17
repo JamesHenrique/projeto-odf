@@ -32,12 +32,13 @@ LOGS_ERROS_WORKSHEET = "logs_erros"
 def enviar_erro_para_sheets(tipo_erro, mensagem_erro, contexto="", modulo="", linha_erro=""):
     """
     Envia detalhes de erro para a aba 'logs_erros' no Google Sheets.
+    Formato: timestamp | data | tipo | descricao | funcao | arquivo
     
     Args:
         tipo_erro (str): Tipo/categoria do erro (ex: "ConnectionError", "ValueError", etc.)
         mensagem_erro (str): Mensagem descritiva do erro
-        contexto (str): Contexto onde o erro ocorreu (função, operação, etc.)
-        modulo (str): Nome do módulo onde o erro ocorreu
+        contexto (str): Contexto/função onde o erro ocorreu
+        modulo (str): Nome do arquivo/módulo onde o erro ocorreu
         linha_erro (str): Número da linha onde o erro ocorreu (se disponível)
     
     Returns:
@@ -60,21 +61,17 @@ def enviar_erro_para_sheets(tipo_erro, mensagem_erro, contexto="", modulo="", li
             worksheet_erros = sheet.add_worksheet(
                 title=LOGS_ERROS_WORKSHEET, 
                 rows="1000", 
-                cols="10"
+                cols="6"
             )
             
-            # Adiciona cabeçalhos
+            # Adiciona cabeçalhos conforme especificado
             cabecalhos = [
                 "timestamp",
-                "data_hora", 
-                "tipo_erro",
-                "mensagem",
-                "contexto",
-                "modulo",
-                "linha",
-                "severidade",
-                "usuario_sistema",
-                "detalhes_extras"
+                "data", 
+                "tipo",
+                "descricao",
+                "funcao",
+                "arquivo"
             ]
             worksheet_erros.append_row(cabecalhos)
             logger.info(f"Aba '{LOGS_ERROS_WORKSHEET}' criada com cabeçalhos")
@@ -82,27 +79,21 @@ def enviar_erro_para_sheets(tipo_erro, mensagem_erro, contexto="", modulo="", li
         # Prepara os dados do erro
         agora = datetime.now()
         timestamp = agora.isoformat()
-        data_hora_legivel = agora.strftime("%d/%m/%Y %H:%M:%S")
+        data_formatada = agora.strftime("%d/%m/%Y %H:%M:%S")
         
-        # Determina severidade baseada no tipo de erro
-        severidade = "MEDIUM"
-        if any(palavra in tipo_erro.lower() for palavra in ["critical", "fatal", "connection", "auth"]):
-            severidade = "HIGH"
-        elif any(palavra in tipo_erro.lower() for palavra in ["warning", "deprecated"]):
-            severidade = "LOW"
+        # Prepara descrição completa
+        descricao_completa = mensagem_erro
+        if linha_erro:
+            descricao_completa = f"[Linha {linha_erro}] {mensagem_erro}"
         
-        # Dados a serem inseridos
+        # Dados a serem inseridos nas 6 colunas
         nova_linha = [
-            timestamp,
-            data_hora_legivel,
-            tipo_erro,
-            mensagem_erro[:500],  # Limita a mensagem a 500 caracteres
-            contexto[:200],       # Limita contexto a 200 caracteres
-            modulo,
-            str(linha_erro),
-            severidade,
-            os.getenv("USERNAME", "sistema"),  # Usuário do sistema Windows
-            f"Python {os.sys.version.split()[0]}"  # Versão do Python
+            timestamp,           # timestamp (ISO format)
+            data_formatada,      # data (formato legível)
+            tipo_erro,           # tipo (tipo do erro)
+            descricao_completa,  # descricao (mensagem + linha)
+            contexto,            # funcao (contexto/função onde ocorreu)
+            modulo               # arquivo (nome do arquivo)
         ]
         
         # Adiciona a linha na planilha

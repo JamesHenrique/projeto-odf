@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import sys
 import traceback
+import signal
 from time import sleep as sp
 
 from func.actions_btn import aba_orcamento, bnt_OKDISABLE, btn_OrcamentoDisable, click_btn_fecharLogo, click_btn_ok, click_btn_sim, click_novo_orcamento, click_orcamento,click_receita,icon_username
@@ -75,6 +76,61 @@ def handler_global_exceptions(exc_type, exc_value, exc_traceback):
 
 # Configura o handler global de exceções
 sys.excepthook = handler_global_exceptions
+
+
+class TimeoutError(Exception):
+    """Exceção customizada para timeout."""
+    pass
+
+
+def timeout_handler(signum, frame):
+    """Handler para timeout."""
+    raise TimeoutError("Operação excedeu o tempo limite")
+
+
+def executar_com_timeout(funcao, timeout_segundos=60):
+    """
+    Executa uma função com timeout.
+    
+    Args:
+        funcao: Função a ser executada
+        timeout_segundos: Tempo máximo de execução em segundos
+    
+    Returns:
+        Resultado da função ou None em caso de timeout
+    """
+    # Windows não suporta signal.alarm, então usamos uma abordagem diferente
+    import threading
+    
+    resultado = [None]
+    excecao = [None]
+    
+    def wrapper():
+        try:
+            resultado[0] = funcao()
+        except Exception as e:
+            excecao[0] = e
+    
+    thread = threading.Thread(target=wrapper)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=timeout_segundos)
+    
+    if thread.is_alive():
+        logger.error(f"Função {funcao.__name__} excedeu timeout de {timeout_segundos}s")
+        enviar_erro_para_sheets(
+            tipo_erro="TimeoutError",
+            mensagem_erro=f"Função {funcao.__name__} travou por mais de {timeout_segundos} segundos",
+            contexto="executar_com_timeout",
+            modulo="main.py"
+        )
+        return None
+    
+    if excecao[0]:
+        raise excecao[0]
+    
+    return resultado[0]
+
 
 
 
@@ -182,9 +238,12 @@ def inic_process():
             return True
         else:
             logger.info("Fórmula Certa não está em execução, iniciando login")
-            login_fcerta()
-            if not login_fcerta():
-                erro_msg = "Falha ao iniciar o ODF. Encerrando o programa"
+            
+            # Tenta fazer login no sistema
+            resultado_login = login_fcerta()
+            
+            if not resultado_login:
+                erro_msg = "Falha ao iniciar o Fórmula Certa"
                 logger.error(erro_msg)
                 enviar_erro_para_sheets(
                     tipo_erro="ApplicationStartupError",
@@ -193,33 +252,68 @@ def inic_process():
                     modulo="main.py"
                 )
                 return False
-
-            resultado_icon = icon_username()
-        if resultado_icon == 'nao':
-            erro_msg = "NÃO LOCALIZOU O ICONE USERNAME"
-            logger.error(erro_msg)
-            logger.info("Reiniciando o ODF")
-            enviar_erro_para_sheets(
-                tipo_erro="UIElementNotFound",
-                mensagem_erro=erro_msg,
-                contexto="inic_process - buscar icone username",
-                modulo="main.py"
-            )
-            return False
+            
+            logger.info("Aplicação Fórmula Certa iniciada, aguardando carregamento...")
+            sp(3)  # Aguarda 3 segundos para a aplicação carregar
+            
+            # Verifica se o ícone de username apareceu
+            tentativas_username = 0
+            max_tentativas_username = 5
+            resultado_icon = 'nao'
+            
+            while tentativas_username < max_tentativas_username and resultado_icon == 'nao':
+                logger.info(f"Tentativa {tentativas_username + 1}/{max_tentativas_username} de localizar ícone username")
+                resultado_icon = icon_username()
+                
+                if resultado_icon == 'nao':
+                    tentativas_username += 1
+                    if tentativas_username < max_tentativas_username:
+                        logger.warning(f"Ícone username não encontrado, aguardando 2 segundos...")
+                        sp(2)
+            
+            if resultado_icon == 'nao':
+                erro_msg = "NÃO LOCALIZOU O ICONE USERNAME após múltiplas tentativas"
+                logger.error(erro_msg)
+                enviar_erro_para_sheets(
+                    tipo_erro="UIElementNotFound",
+                    mensagem_erro=erro_msg,
+                    contexto="inic_process - buscar icone username",
+                    modulo="main.py"
+                )
+                return False
            
         # Inserindo dados para o login
         logger.info("Realizando login no sistema")
+        sp(1)  # Pequena pausa antes de começar
         py.press('ENTER')
+        sp(0.5)
         py.write(USERNAME)
+        sp(0.5)
         py.press('ENTER')
+        sp(0.5)
         py.write(SENHA)
+        sp(0.5)
         py.press('ENTER')
         logger.info("Credenciais inseridas com sucesso")
+        logger.info("Aguardando sistema processar login...")
         sp(5)
         
-        clicou_fecharLogo = click_btn_fecharLogo()
+        # Tenta fechar logo com múltiplas tentativas
+        logger.info("Buscando botão fechar logo...")
+        tentativas_fechar = 0
+        max_tentativas_fechar = 3
+        clicou_fecharLogo = 'não'
+        
+        while tentativas_fechar < max_tentativas_fechar and clicou_fecharLogo == 'não':
+            clicou_fecharLogo = click_btn_fecharLogo()
+            if clicou_fecharLogo == 'não':
+                tentativas_fechar += 1
+                if tentativas_fechar < max_tentativas_fechar:
+                    logger.warning(f"Botão fechar logo não encontrado, tentativa {tentativas_fechar}/{max_tentativas_fechar}")
+                    sp(2)
+        
         if clicou_fecharLogo == 'não':
-            erro_msg = "NÃO LOCALIZOU O ICONE FECHAR LOGO"
+            erro_msg = "NÃO LOCALIZOU O ICONE FECHAR LOGO após múltiplas tentativas"
             logger.error(erro_msg)
             enviar_erro_para_sheets(
                 tipo_erro="UIElementNotFound",
@@ -228,10 +322,26 @@ def inic_process():
                 modulo="main.py"
             )
             return False
+        
+        logger.info("Botão fechar logo clicado com sucesso")
+        sp(1)
             
-        clicou_receita = click_receita()
+        # Tenta clicar no ícone receita com múltiplas tentativas
+        logger.info("Buscando ícone receita...")
+        tentativas_receita = 0
+        max_tentativas_receita = 3
+        clicou_receita = 'não'
+        
+        while tentativas_receita < max_tentativas_receita and clicou_receita == 'não':
+            clicou_receita = click_receita()
+            if clicou_receita == 'não':
+                tentativas_receita += 1
+                if tentativas_receita < max_tentativas_receita:
+                    logger.warning(f"Ícone receita não encontrado, tentativa {tentativas_receita}/{max_tentativas_receita}")
+                    sp(2)
+        
         if clicou_receita == 'não':
-            erro_msg = "NÃO LOCALIZOU O ICONE RECEITA"
+            erro_msg = "NÃO LOCALIZOU O ICONE RECEITA após múltiplas tentativas"
             logger.error(erro_msg)
             enviar_erro_para_sheets(
                 tipo_erro="UIElementNotFound",
@@ -240,10 +350,26 @@ def inic_process():
                 modulo="main.py"
             )
             return False
-            
-        clicou_orcamento = click_orcamento()
+        
+        logger.info("Ícone receita clicado com sucesso")
+        sp(1)
+        
+        # Tenta clicar no ícone orçamento com múltiplas tentativas
+        logger.info("Buscando ícone orçamento...")
+        tentativas_orcamento = 0
+        max_tentativas_orcamento = 3
+        clicou_orcamento = 'não'
+        
+        while tentativas_orcamento < max_tentativas_orcamento and clicou_orcamento == 'não':
+            clicou_orcamento = click_orcamento()
+            if clicou_orcamento == 'não':
+                tentativas_orcamento += 1
+                if tentativas_orcamento < max_tentativas_orcamento:
+                    logger.warning(f"Ícone orçamento não encontrado, tentativa {tentativas_orcamento}/{max_tentativas_orcamento}")
+                    sp(2)
+        
         if clicou_orcamento == 'não':
-            erro_msg = "NÃO LOCALIZOU O ICONE ORÇAMENTO"
+            erro_msg = "NÃO LOCALIZOU O ICONE ORÇAMENTO após múltiplas tentativas"
             logger.error(erro_msg)
             enviar_erro_para_sheets(
                 tipo_erro="UIElementNotFound",
@@ -252,10 +378,26 @@ def inic_process():
                 modulo="main.py"
             )
             return False
+        
+        logger.info("Ícone orçamento clicado com sucesso")
+        sp(1)
             
-        clicou_novo_orcamento = click_novo_orcamento()
+        # Tenta clicar no novo orçamento com múltiplas tentativas
+        logger.info("Buscando ícone novo orçamento...")
+        tentativas_novo = 0
+        max_tentativas_novo = 3
+        clicou_novo_orcamento = 'não'
+        
+        while tentativas_novo < max_tentativas_novo and clicou_novo_orcamento == 'não':
+            clicou_novo_orcamento = click_novo_orcamento()
+            if clicou_novo_orcamento == 'não':
+                tentativas_novo += 1
+                if tentativas_novo < max_tentativas_novo:
+                    logger.warning(f"Ícone novo orçamento não encontrado, tentativa {tentativas_novo}/{max_tentativas_novo}")
+                    sp(2)
+        
         if clicou_novo_orcamento == 'não':
-            erro_msg = "NÃO LOCALIZOU O ICONE NOVO ORÇAMENTO"
+            erro_msg = "NÃO LOCALIZOU O ICONE NOVO ORÇAMENTO após múltiplas tentativas"
             logger.error(erro_msg)
             enviar_erro_para_sheets(
                 tipo_erro="UIElementNotFound",
@@ -264,10 +406,26 @@ def inic_process():
                 modulo="main.py"
             )
             return False
+        
+        logger.info("Ícone novo orçamento clicado com sucesso")
+        sp(1)
             
-        clicou_ok = click_btn_ok()
+        # Tenta clicar no botão OK com múltiplas tentativas
+        logger.info("Buscando botão OK...")
+        tentativas_ok = 0
+        max_tentativas_ok = 3
+        clicou_ok = 'não'
+        
+        while tentativas_ok < max_tentativas_ok and clicou_ok == 'não':
+            clicou_ok = click_btn_ok()
+            if clicou_ok == 'não':
+                tentativas_ok += 1
+                if tentativas_ok < max_tentativas_ok:
+                    logger.warning(f"Botão OK não encontrado, tentativa {tentativas_ok}/{max_tentativas_ok}")
+                    sp(2)
+        
         if clicou_ok == 'não':
-            erro_msg = "NÃO LOCALIZOU O ICONE OK"
+            erro_msg = "NÃO LOCALIZOU O ICONE OK após múltiplas tentativas"
             logger.error(erro_msg)
             enviar_erro_para_sheets(
                 tipo_erro="UIElementNotFound",
@@ -276,7 +434,8 @@ def inic_process():
                 modulo="main.py"
             )
             return False
-            
+        
+        logger.info("Botão OK clicado com sucesso")
         sp(2)
         py.press('enter')
         logger.info("Login e configuração inicial concluídos com sucesso")
@@ -309,20 +468,59 @@ try:
         logger.info(f"Tentativa {tentativa} de {max_tentativas} para iniciar o processo")
         
         try:
-            resultado = inic_process()
+            # Executa inic_process com timeout de 120 segundos (2 minutos)
+            logger.info("Iniciando processo com timeout de 120 segundos...")
+            resultado = executar_com_timeout(inic_process, timeout_segundos=120)
+            
+            if resultado is None:
+                # Timeout ocorreu
+                erro_msg = f"Processo de inicialização travou na tentativa {tentativa}"
+                logger.error(erro_msg)
+                logger.warning("Tentando reiniciar o Fórmula Certa...")
+                
+                # Tenta forçar fechamento
+                try:
+                    closed_fcerta()
+                    sp(3)
+                except Exception as e:
+                    logger.error(f"Erro ao fechar Fórmula Certa: {str(e)}")
+                
+                # Se não é a última tentativa, tenta reiniciar
+                if tentativa < max_tentativas:
+                    logger.info(f"Aguardando 5 segundos antes da próxima tentativa...")
+                    sp(5)
+                    continue
+                else:
+                    logger.critical("Todas as tentativas falharam devido a timeout")
+                    enviar_erro_para_sheets(
+                        tipo_erro="CRÍTICO: TimeoutFailure",
+                        mensagem_erro=f"Sistema travou em todas as {max_tentativas} tentativas",
+                        contexto="loop_principal - timeout múltiplo",
+                        modulo="main.py"
+                    )
+                    break
             
             if not resultado:
                 logger.error("FALHA AO INICIAR O PROCESSO")
-                logger.info("Reiniciando o Fórmula Certa")
                 
-                if not reiniciar_fcerta():
-                    erro_msg = "Falha ao reiniciar o Fórmula Certa"
+                # Se não é a última tentativa, tenta reiniciar
+                if tentativa < max_tentativas:
+                    logger.info("Reiniciando o Fórmula Certa...")
+                    
+                    if not reiniciar_fcerta():
+                        logger.error("Falha ao reiniciar Fórmula Certa, aguardando antes de nova tentativa")
+                        sp(5)
+                    else:
+                        logger.info("Fórmula Certa reiniciado com sucesso")
+                        sp(3)
+                    continue
+                else:
+                    erro_msg = "Falha ao iniciar processo após todas as tentativas"
                     logger.critical(erro_msg)
-                    logger.error("Enviando EMail notificando de erro no sistema")
                     enviar_erro_para_sheets(
                         tipo_erro="SystemRestartFailure",
                         mensagem_erro=erro_msg,
-                        contexto=f"Loop principal - tentativa {tentativa}",
+                        contexto=f"Loop principal - tentativa final {tentativa}",
                         modulo="main.py"
                     )
                     break
