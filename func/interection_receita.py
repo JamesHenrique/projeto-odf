@@ -1,4 +1,4 @@
-from func.actions_btn import alerta_Prodembalagens, alerta_Retirada, alerta_acrescimo, alerta_crm, alerta_impressao, alerta_maisformulas, btn_OrcamentoDisable, click_btn_fecharLogo, alerta_sem_cadastro, alerta_qntzerada, click_btn_okModal, click_campo_data,click_btn_ok,click_btn_sim,click_btn_nao,alerta_dadoscorretos,alerta_controlados, click_novo_orcamento
+from func.actions_btn import alerta_Prodembalagens, alerta_Retirada, alerta_acrescimo, alerta_crm, alerta_dosagem, alerta_impressao, alerta_maisformulas, btn_OrcamentoDisable, click_btn_fecharLogo, alerta_sem_cadastro, alerta_qntzerada, click_btn_okModal, click_campo_data,click_btn_ok,click_btn_sim,click_btn_nao,alerta_dadoscorretos,alerta_controlados, click_novo_orcamento
 import pyautogui as py  
 from time import sleep as sp
 import re
@@ -81,8 +81,9 @@ def gerar_orcamento():
                 
             tipo_embalagem = ''
             qnt_embalagem = 0
+            qnt_press = 0
 
-            # # # --- CAMPOS INICIAIS ---
+            # # --- CAMPOS INICIAIS ---
             sp(3)
             resultado_campo = click_campo_data()
             if resultado_campo == 'não':
@@ -166,7 +167,9 @@ def gerar_orcamento():
             elif tipo.lower() == 'loção':
                 tipo = '3'
                 tipo_formula = 'ML'
-                qnt_embalagem = 1
+                qnt_embalagem = quantidade_limpa
+                
+                
 
             print("Tipo -> ",tipo)
             py.write(tipo)
@@ -177,7 +180,11 @@ def gerar_orcamento():
             py.press('tab')
             print("Tipo de formula -> ",tipo_formula)
             py.write(str(tipo_formula))  # Tipo de fórmula
-            py.press('tab', presses=2)
+    
+            if tipo != '3':
+                py.press('tab',presses=2) #antes press 2 quando cps e creme
+            else:
+                py.press('tab')
 
             sp(2)
             if tipo != '2':
@@ -192,7 +199,7 @@ def gerar_orcamento():
             print("Tipo do pote -> ",tipo_embalagem)
             py.write(str(qnt_embalagem))  # Quantidade de potes
 
-            # # ** ETAPA INSERINDO OS INSUMOS **
+            # ** ETAPA INSERINDO OS INSUMOS **
 
             # Garante que há pelo menos um item em 'data'
             py.press('tab', presses=9,interval=0.5)  # Vai para o primeiro campo de insumo antes 6
@@ -251,6 +258,7 @@ def gerar_orcamento():
                         py.write("")
 
                 py.press("enter")
+                alerta_dosagem()
                 alerta_qntzerada()
 
 
@@ -340,6 +348,4 @@ def gerar_orcamento():
                 sp(5)
                 py.press('esc')
                 return True
-
-       
 

@@ -243,6 +243,9 @@ def buscar_variacoes_insumos():
     """
     Busca as variacoes dos insumos na aba 'base_insumos'.
     Retorna dicionario com medicamento como chave e lista de variacoes como valor.
+    
+    As variações devem estar separadas por ponto e vírgula (;) na coluna 'variacoes'.
+    Exemplo: GARCINIA CAMBOGIA;GARCINIA CAMBOGIA EXTRACT;GARCINIA
     """
     try:
         creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -269,13 +272,14 @@ def buscar_variacoes_insumos():
             variacoes_str = insumo.get('variacoes', '').strip()
             
             if descricao:
-                # Processa as variacoes (separadas por '-')
+                # Processa as variacoes (separadas por ';' - ponto e vírgula)
                 if variacoes_str:
-                    # Remove hifen final se existir
-                    variacoes_str = variacoes_str.rstrip('-').strip()
+                    # Remove ponto e vírgula final se existir
+                    variacoes_str = variacoes_str.rstrip(';').strip()
                     
                     if variacoes_str:
-                        variacoes_lista = [v.strip() for v in variacoes_str.split('-') if v.strip()]
+                        # Separa por ponto e vírgula
+                        variacoes_lista = [v.strip() for v in variacoes_str.split(';') if v.strip()]
                         
                         if variacoes_lista:  # So adiciona se realmente tem variacoes
                             mapa_variacoes[descricao] = variacoes_lista
@@ -314,7 +318,7 @@ def processar_medicamentos_com_variacoes(medicamentos_str, mapa_variacoes):
     Processa a string de medicamentos e adiciona as variacoes encontradas.
     
     1. Busca EXATA na coluna 'descricao'
-    2. Se nao encontrar, busca na coluna 'variacoes' separando por '-'
+    2. Se nao encontrar, busca na coluna 'variacoes' separando por ';' (ponto e vírgula)
     3. Retorna todas as variacoes encontradas incluindo a descricao original
     
     Args:
@@ -323,6 +327,8 @@ def processar_medicamentos_com_variacoes(medicamentos_str, mapa_variacoes):
     
     Returns:
         String processada com variacoes no formato: "MedicamentoA:[Descricao,Var1,Var2], MedicamentoB"
+        
+    Exemplo de entrada na coluna variacoes: GARCINIA CAMBOGIA;GARCINIA CAMBOGIA EXTRACT
     """
     if not medicamentos_str or not medicamentos_str.strip():
         return medicamentos_str

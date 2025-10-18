@@ -180,64 +180,46 @@ def inic_process():
             logger.info("Fórmula Certa já está em execução")
         
             if aba_orcamento() == 'nao':
-                logger.warning("NÃO LOCALIZOU A ABA ORÇAMENTO")
-                clicou_receita = click_receita()
-                if clicou_receita == 'nao':
-                    erro_msg = "NÃO LOCALIZOU O ICONE RECEITA"
+                logger.warning("NÃO LOCALIZOU A ABA ORÇAMENTO - Sistema precisa ser reiniciado completamente")
+                logger.info("Fechando Fórmula Certa para reiniciar com login completo...")
+                
+                # Fecha o Fórmula Certa completamente
+                try:
+                    closed_fcerta()
+                    sp(3)
+                    logger.info("Fórmula Certa fechado com sucesso")
+                except Exception as e:
+                    logger.error(f"Erro ao fechar Fórmula Certa: {str(e)}")
+                
+                # Agora o processo de login completo será executado abaixo
+                logger.info("Iniciando processo de login completo após fechamento...")
+                is_open = False  # Define como fechado para entrar no fluxo de login
+
+            if is_open and aba_orcamento() == 'sim':
+                logger.info("LOCALIZOU A ABA ORÇAMENTO")
+                if bnt_OKDISABLE() == 'nao':
+                    erro_msg = "NÃO LOCALIZOU O ICONE OK DISABLED"
                     logger.error(erro_msg)
                     enviar_erro_para_sheets(
                         tipo_erro="UIElementNotFound",
                         mensagem_erro=erro_msg,
-                        contexto="inic_process - buscar icone receita",
+                        contexto="inic_process - buscar botão OK disabled",
                         modulo="main.py"
                     )
-
-                if aba_orcamento() == 'sim':
-                    logger.info("LOCALIZOU A ABA ORÇAMENTO")
-                    if bnt_OKDISABLE() == 'nao':
-                        erro_msg = "NÃO LOCALIZOU O ICONE OK DISABLED"
-                        logger.error(erro_msg)
-                        enviar_erro_para_sheets(
-                            tipo_erro="UIElementNotFound",
-                            mensagem_erro=erro_msg,
-                            contexto="inic_process - buscar botão OK disabled",
-                            modulo="main.py"
-                        )
-                        return False
-                        
-                    if btn_OrcamentoDisable() == 'nao':
-                        logger.warning("NÃO LOCALIZOU O ICONE ORÇAMENTO DISABLED")
-                        py.press('f2')
-                        sp(2)
-                        py.press('enter')
+                    return False
                     
-                    logger.info("Processo inicializado com sucesso - Orçamento disponível")
-                    return True
-                        
-                clicou_orcamento = click_orcamento()
-                if clicou_orcamento == 'nao':
-                    erro_msg = "NÃO LOCALIZOU O ICONE ORÇAMENTO"
-                    logger.error(erro_msg)
-                    enviar_erro_para_sheets(
-                        tipo_erro="UIElementNotFound",
-                        mensagem_erro=erro_msg,
-                        contexto="inic_process - buscar icone orçamento",
-                        modulo="main.py"
-                    )
-                    return False 
-
-                sp(2) 
-                py.press('f2')
-                sp(2)
-                py.press('enter')
-                logger.info("Orçamento ativado com sucesso")
+                if btn_OrcamentoDisable() == 'nao':
+                    logger.warning("NÃO LOCALIZOU O ICONE ORÇAMENTO DISABLED")
+                    py.press('f2')
+                    sp(2)
+                    py.press('enter')
+                
+                logger.info("Processo inicializado com sucesso - Orçamento disponível")
                 return True
-
-            btn_OrcamentoDisable()
-            logger.info("Sistema já configurado corretamente")
-            return True
-        else:
-            logger.info("Fórmula Certa não está em execução, iniciando login")
+        
+        # Se chegou aqui, ou não estava aberto ou foi fechado por falta de aba orçamento
+        if not is_open:
+            logger.info("Iniciando processo completo de login...")
             
             # Tenta fazer login no sistema
             resultado_login = login_fcerta()
