@@ -1,16 +1,43 @@
 #!/usr/bin/env python3
 """
 Sistema de Logging para Projeto ODF
-Configura logs com rotação diária no formato dd-mm-horas.log
+Configura logs com estrutura de pastas: logs/MES_ANO/DIA/HH.log
 """
 import logging
 import os
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 
+def criar_estrutura_logs():
+    """
+    Cria a estrutura de diretórios para logs: logs/MES_ANO/DIA/
+    
+    Returns:
+        str: Caminho completo do diretório de logs do dia
+    """
+    # Diretório base de logs
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    logs_base = os.path.join(base_dir, 'logs')
+    
+    # Data atual
+    agora = datetime.now()
+    mes_ano = agora.strftime("%m_%Y")  # Formato: 10_2025
+    dia = agora.strftime("%d")         # Formato: 28
+    
+    # Cria estrutura: logs/10_2025/28/
+    log_dir = os.path.join(logs_base, mes_ano, dia)
+    
+    # Cria todos os diretórios se não existirem
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        print(f"📁 Estrutura de logs criada: {log_dir}")
+    
+    return log_dir
+
 def setup_logger(name='projeto_odf', level=logging.INFO):
     """
-    Configura o sistema de logging com arquivo rotativo diário
+    Configura o sistema de logging com arquivo rotativo por hora
+    Estrutura: logs/MES_ANO/DIA/HH.log
     
     Args:
         name: Nome do logger
@@ -20,14 +47,12 @@ def setup_logger(name='projeto_odf', level=logging.INFO):
         logger: Instância configurada do logger
     """
     
-    # Cria o diretório de logs se não existir
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Cria a estrutura de diretórios
+    log_dir = criar_estrutura_logs()
     
-    # Nome do arquivo com formato dd-mm-yyyy-HH
-    timestamp = datetime.now().strftime("%d-%m-%Y-%H")
-    log_filename = os.path.join(log_dir, f"{timestamp}.log")
+    # Nome do arquivo com formato HH (apenas hora)
+    hora = datetime.now().strftime("%H")
+    log_filename = os.path.join(log_dir, f"{hora}.log")
     
     # Configura o logger
     logger = logging.getLogger(name)
@@ -43,7 +68,7 @@ def setup_logger(name='projeto_odf', level=logging.INFO):
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Handler para arquivo com rotação por hora
+    # Handler para arquivo
     file_handler = logging.FileHandler(log_filename, encoding='utf-8')
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)

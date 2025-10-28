@@ -8,7 +8,7 @@ import signal
 from time import sleep as sp
 
 from func.actions_btn import aba_orcamento, bnt_OKDISABLE, btn_OrcamentoDisable, click_btn_fecharLogo, click_btn_ok, click_btn_sim, click_novo_orcamento, click_orcamento,click_receita,icon_username
-from func.inic_login import reiniciar_fcerta,login_fcerta,closed_fcerta, verifica_fcerta
+from func.inic_login import reiniciar_fcerta,login_fcerta,closed_fcerta, verifica_fcerta, verificar_aba_orcamento_disponivel
 from func.interection_receita import gerar_orcamento
 from func.logger_config import get_logger
 from func.integrador_chatwoot_sheets import obter_dados_json, buscar_conversas_chatwoot, enviar_erro_para_sheets, registrar_erro_automatico
@@ -178,25 +178,50 @@ def inic_process():
 
         if is_open:
             logger.info("Fórmula Certa já está em execução")
-        
-            if aba_orcamento() == 'nao':
-                logger.warning("NÃO LOCALIZOU A ABA ORÇAMENTO - Sistema precisa ser reiniciado completamente")
+            
+            # Verifica se a aba de orçamento está disponível no FCReceitas
+            logger.info("Verificando disponibilidade da aba de Orçamento...")
+            aba_disponivel = verificar_aba_orcamento_disponivel()
+            
+            if not aba_disponivel:
+                logger.warning("ABA DE ORÇAMENTO NÃO DISPONÍVEL - Sistema precisa ser reiniciado completamente")
                 logger.info("Fechando Fórmula Certa para reiniciar com login completo...")
                 
-                # Fecha o Fórmula Certa completamente
+                # Fecha o Fórmula Certa completamente (incluindo FCReceitas)
                 try:
                     closed_fcerta()
-                    sp(3)
-                    logger.info("Fórmula Certa fechado com sucesso")
+                    sp(5)
+                    logger.info("Fórmula Certa e FCReceitas fechados com sucesso")
                 except Exception as e:
                     logger.error(f"Erro ao fechar Fórmula Certa: {str(e)}")
+                    enviar_erro_para_sheets(
+                        tipo_erro="SystemCloseError",
+                        mensagem_erro=f"Erro ao fechar sistema: {str(e)}",
+                        contexto="inic_process - fechar para reiniciar",
+                        modulo="main.py"
+                    )
                 
-                # Agora o processo de login completo será executado abaixo
-                logger.info("Iniciando processo de login completo após fechamento...")
-                is_open = False  # Define como fechado para entrar no fluxo de login
-
-            if is_open and aba_orcamento() == 'sim':
-                logger.info("LOCALIZOU A ABA ORÇAMENTO")
+                # Define como fechado para entrar no fluxo de login completo
+                is_open = False
+                logger.info("Sistema será reiniciado com processo de login completo")
+            
+            # Se a aba está disponível, verifica os botões
+            if is_open and aba_disponivel:
+                logger.info("Aba de Orçamento disponível - verificando estado dos botões")
+                
+                if aba_orcamento() == 'nao':
+                    logger.warning("Aba de orçamento não está ativa na interface")
+                    # Tenta ativar manualmente
+                    logger.info("Tentando ativar aba de orçamento...")
+                    clicou_receita = click_receita()
+                    sp(2)
+                    clicou_orcamento = click_orcamento()
+                    sp(2)
+                    
+                    if aba_orcamento() == 'nao':
+                        logger.error("Não foi possível ativar aba de orçamento")
+                        return False
+                
                 if bnt_OKDISABLE() == 'nao':
                     erro_msg = "NÃO LOCALIZOU O ICONE OK DISABLED"
                     logger.error(erro_msg)
@@ -217,7 +242,8 @@ def inic_process():
                 logger.info("Processo inicializado com sucesso - Orçamento disponível")
                 return True
         
-        # Se chegou aqui, ou não estava aberto ou foi fechado por falta de aba orçamento
+        
+        # Se chegou aqui, sistema não estava aberto ou foi fechado
         if not is_open:
             logger.info("Iniciando processo completo de login...")
             
